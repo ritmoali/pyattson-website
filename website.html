@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Pyattson &amp; Co · Fuel Check</title>
+<meta name="description" content="Pyattson &amp; Co checks a petrol station's daily fuel records and sends the owner a WhatsApp message when fuel doesn't add up.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@500;700&family=Source+Sans+3:wght@400;600&family=IBM+Plex+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: one narrow reading column, a forecourt-ledger feel — ruled lines, mono readings, one amber accent for fuel. */
+:root {
+  --bg: #f6f5f1;
+  --surface: #ffffff;
+  --ink: #17201d;
+  --muted: #56605b;
+  --rule: #d9d7cf;
+  --accent: #c2700b;
+  --accent-soft: #f6e6cf;
+  --ok: #2f7d4f;
+  --bad: #b3361f;
+  --font-display: "Familjen Grotesk", "Helvetica Neue", Arial, sans-serif;
+  --font-body: "Source Sans 3", "Segoe UI", Arial, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #121614; --surface: #1a201d; --ink: #ecebe6; --muted: #a3aaa5; --rule: #2f3632;
+    --accent: #e89a3c; --accent-soft: #3a2a14; --ok: #6cc391; --bad: #ef7a62; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #121614; --surface: #1a201d; --ink: #ecebe6; --muted: #a3aaa5; --rule: #2f3632;
+  --accent: #e89a3c; --accent-soft: #3a2a14; --ok: #6cc391; --bad: #ef7a62; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font-family: var(--font-body); font-size: 1.0625rem; line-height: 1.6;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: env(safe-area-inset-top, 0px) env(safe-area-inset-bottom, 0px);
+}
+.wrap { max-width: 44rem; margin-inline: auto; }
+header { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; flex-wrap: wrap; padding-block: 1.5rem; border-bottom: 1px solid var(--rule); }
+.brand { font-family: var(--font-display); font-weight: 700; font-size: 1.15rem; letter-spacing: -0.01em; }
+.brand span { color: var(--muted); font-weight: 500; }
+nav a { color: var(--muted); text-decoration: none; margin-left: 1rem; font-size: 0.95rem; }
+nav a:first-child { margin-left: 0; }
+nav a:hover, nav a:focus-visible { color: var(--ink); }
+a:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 2px; }
+h1, h2 { font-family: var(--font-display); font-weight: 700; letter-spacing: -0.02em; text-wrap: balance; line-height: 1.15; }
+h1 { font-size: clamp(2rem, 6vw, 2.9rem); margin: 3rem 0 1rem; }
+h2 { font-size: 1.45rem; margin: 0 0 0.75rem; }
+.lead { font-size: 1.2rem; color: var(--muted); max-width: 36rem; margin: 0 0 2rem; }
+section { padding-block: 2.5rem; border-top: 1px solid var(--rule); }
+.label { font-family: var(--font-mono); font-size: 0.78rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); margin: 0 0 0.6rem; }
+.steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 1.25rem; }
+.steps li { display: grid; grid-template-columns: 2.25rem 1fr; gap: 0.75rem; }
+.steps .n { font-family: var(--font-mono); font-weight: 600; color: var(--accent); }
+.steps strong { display: block; }
+.steps p { margin: 0.15rem 0 0; color: var(--muted); }
+.ledger { background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; overflow-x: auto; }
+.ledger table { border-collapse: collapse; width: 100%; font-family: var(--font-mono); font-size: 0.9rem; font-variant-numeric: tabular-nums; }
+.ledger th, .ledger td { padding: 0.55rem 0.9rem; text-align: right; border-bottom: 1px solid var(--rule); white-space: nowrap; }
+.ledger th:first-child, .ledger td:first-child { text-align: left; }
+.ledger th { font-weight: 600; color: var(--muted); font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.05em; }
+.ledger tr:last-child td { border-bottom: 0; }
+.ledger .gap { color: var(--bad); font-weight: 600; }
+.formula { font-family: var(--font-mono); font-size: 0.92rem; color: var(--muted); margin: 0.9rem 0 0; }
+.msg { max-width: 24rem; background: var(--accent-soft); border-radius: 10px 10px 10px 2px; padding: 0.85rem 1rem; margin-top: 1.25rem; }
+.msg .who { font-size: 0.8rem; font-weight: 600; color: var(--muted); margin: 0 0 0.25rem; }
+.msg p { margin: 0; }
+.note { font-size: 0.9rem; color: var(--muted); margin: 0.75rem 0 0; }
+.facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr)); gap: 1.25rem; margin: 0; }
+.facts div { min-width: 0; }
+.facts dt { font-weight: 600; }
+.facts dd { margin: 0.15rem 0 0; color: var(--muted); }
+.contact a { color: var(--ink); font-weight: 600; text-decoration-color: var(--accent); text-underline-offset: 3px; }
+footer { border-top: 1px solid var(--rule); padding-block: 1.5rem 2.5rem; font-size: 0.88rem; color: var(--muted); }
+footer p { margin: 0.2rem 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="brand">Pyattson &amp; Co <span>· Fuel Check</span></div>
+    <nav aria-label="Sections">
+      <a href="#how">How it works</a>
+      <a href="#contact">Contact</a>
+    </nav>
+  </header>
+
+  <main>
+    <h1>Know the same evening when fuel goes missing.</h1>
+    <p class="lead">Pyattson &amp; Co checks your station's daily dips, pump readings and deliveries, and sends you a short WhatsApp message saying whether the fuel adds up.</p>
+
+    <section id="how" aria-labelledby="how-h">
+      <p class="label">How it works</p>
+      <h2 id="how-h">No new equipment. No new app.</h2>
+      <ol class="steps">
+        <li><span class="n">01</span><div><strong>Send a photo of the day's page</strong><p>Your manager sends a photo of the notebook page with the opening dip, deliveries, pump meter readings and closing dip, the records you already keep.</p></div></li>
+        <li><span class="n">02</span><div><strong>We check the numbers</strong><p>We read the page, confirm the readings with the sender, then compare the fuel that left each tank with what the pumps say was sold.</p></div></li>
+        <li><span class="n">03</span><div><strong>You get the result on WhatsApp</strong><p>A short message every evening, with a clear warning when fuel is missing or a delivery wasn't recorded, and a weekly summary with the value in shillings.</p></div></li>
+      </ol>
+    </section>
+
+    <section aria-labelledby="ex-h">
+      <p class="label">An example day</p>
+      <h2 id="ex-h">What the check looks at</h2>
+      <div class="ledger">
+        <table>
+          <caption class="sr-only" style="position:absolute;left:-9999px">Example readings for one tank on one day</caption>
+          <thead><tr><th scope="col">PMS · Tank 1</th><th scope="col">Litres</th></tr></thead>
+          <tbody>
+            <tr><td>Opening dip</td><td>10,575</td></tr>
+            <tr><td>Delivered</td><td>0</td></tr>
+            <tr><td>Sold (pump meters)</td><td>3,200</td></tr>
+            <tr><td>Expected closing</td><td>7,375</td></tr>
+            <tr><td>Closing dip</td><td>7,085</td></tr>
+            <tr><td>Difference</td><td class="gap">−290</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="formula">expected closing = opening + delivered − sold</p>
+      <div class="msg" role="note" aria-label="Example WhatsApp message">
+        <p class="who">Pyattson &amp; Co</p>
+        <p>🛑 14 Oct, Tank 1 (PMS): 290 litres missing. Please check the shift records.</p>
+      </div>
+      <p class="note">Example figures for illustration. Small differences from heat and measuring are expected and are not flagged.</p>
+    </section>
+
+    <section aria-labelledby="who-h">
+      <p class="label">Who it's for</p>
+      <h2 id="who-h">Independent petrol stations in Kenya</h2>
+      <dl class="facts">
+        <div><dt>Owners who aren't on site</dt><dd>See every evening whether the fuel adds up, without waiting for the end-of-month count.</dd></div>
+        <div><dt>Stations that record by hand</dt><dd>Works with dipsticks and a notebook. No tank sensors needed to start.</dd></div>
+        <div><dt>Petrol and diesel</dt><dd>PMS and AGO tanks are checked separately.</dd></div>
+      </dl>
+      <p class="note">We are starting with a small number of pilot stations, with visits in Kenya from January 2027.</p>
+    </section>
+
+    <section id="contact" class="contact" aria-labelledby="contact-h">
+      <p class="label">Contact</p>
+      <h2 id="contact-h">Talk to us about a pilot</h2>
+      <p>Email <a href="mailto:hello@pyattson.co.uk">hello@pyattson.co.uk</a></p>
+    </section>
+
+    <section aria-labelledby="privacy-h">
+      <p class="label">Privacy</p>
+      <h2 id="privacy-h">Your records stay yours</h2>
+      <p>We use the photos and readings a station sends only to run its fuel checks and send its messages. We don't sell or share them, and we delete a station's records on request.</p>
+    </section>
+  </main>
+
+  <footer>
+    <p>Pyattson &amp; Co is a sole trader business based in the United Kingdom.</p>
+    <p>© 2026 Pyattson &amp; Co</p>
+  </footer>
+</div>
+</body>
+</html>
