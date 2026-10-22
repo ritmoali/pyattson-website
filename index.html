@@ -1,0 +1,309 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Pyattson &amp; Co · Fuel Check</title>
+<meta name="description" content="Pyattson &amp; Co checks a petrol station's daily fuel records and sends the owner a WhatsApp message when fuel doesn't add up.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@500;700&family=Source+Sans+3:wght@400;600&family=IBM+Plex+Mono:wght@400;600&family=Caveat:wght@500&display=swap">
+<style>
+/* Layout: forecourt ledger. A deep green hero band with the product shown in a phone, then ruled ledger sections on paper. Amber is the single accent (fuel). */
+:root {
+  --bg: #f6f5f1;
+  --surface: #ffffff;
+  --ink: #17201d;
+  --muted: #56605b;
+  --rule: #dcdad2;
+  --band: #10302a;
+  --band-ink: #eef1ec;
+  --band-muted: #a9bab3;
+  --accent: #c2700b;
+  --accent-strong: #e8901f;
+  --accent-soft: #f6e6cf;
+  --bad: #b3361f;
+  --chat-bg: #e9e4da;
+  --bubble-in: #ffffff;
+  --bubble-out: #d9f2cf;
+  --paper: #fbf7ea;
+  --pen: #233a8c;
+  --font-display: "Familjen Grotesk", "Helvetica Neue", Arial, sans-serif;
+  --font-body: "Source Sans 3", "Segoe UI", Arial, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+  --font-hand: "Caveat", "Bradley Hand", cursive;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #121614; --surface: #1a201d; --ink: #ecebe6; --muted: #a3aaa5; --rule: #2f3632;
+    --band: #0b211d; --band-ink: #eef1ec; --band-muted: #93a69f;
+    --accent: #e89a3c; --accent-strong: #f0a64b; --accent-soft: #3a2a14; --bad: #ef7a62;
+    --chat-bg: #0f1a17; --bubble-in: #1f2c28; --bubble-out: #1f4a35; --paper: #f4efdf; --pen: #233a8c;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #121614; --surface: #1a201d; --ink: #ecebe6; --muted: #a3aaa5; --rule: #2f3632;
+  --band: #0b211d; --band-ink: #eef1ec; --band-muted: #93a69f;
+  --accent: #e89a3c; --accent-strong: #f0a64b; --accent-soft: #3a2a14; --bad: #ef7a62;
+  --chat-bg: #0f1a17; --bubble-in: #1f2c28; --bubble-out: #1f4a35; --paper: #f4efdf; --pen: #233a8c;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font-family: var(--font-body); font-size: 1.0625rem; line-height: 1.6;
+  padding-block: env(safe-area-inset-top, 0px) env(safe-area-inset-bottom, 0px);
+}
+.inner {
+  max-width: 64rem; margin-inline: auto;
+  padding-left: max(20px, env(safe-area-inset-left, 0px));
+  padding-right: max(20px, env(safe-area-inset-right, 0px));
+}
+.narrow { max-width: 46rem; }
+a:focus-visible, .btn:focus-visible { outline: 2px solid var(--accent-strong); outline-offset: 3px; border-radius: 4px; }
+
+/* Hero band */
+.band { background: var(--band); color: var(--band-ink); }
+header.top { display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding-block: 1.25rem; }
+.brand { display: flex; align-items: center; gap: 0.6rem; text-decoration: none; color: inherit; }
+.brand svg { flex: none; }
+.brand b { font-family: var(--font-display); font-weight: 700; font-size: 1.15rem; letter-spacing: -0.01em; }
+.brand span { display: block; font-family: var(--font-mono); font-size: 0.7rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--band-muted); line-height: 1.2; }
+.btn {
+  display: inline-block; text-decoration: none; font-weight: 600; font-size: 0.98rem;
+  padding: 0.65rem 1.1rem; border-radius: 6px; background: var(--accent-strong); color: #1b1305;
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+.btn:hover { background: #f3ad55; }
+.btn.ghost { background: transparent; color: var(--band-ink); box-shadow: inset 0 0 0 1px rgba(238,241,236,0.35); }
+.btn.ghost:hover { background: rgba(238,241,236,0.08); }
+@media (prefers-reduced-motion: no-preference) { .btn:active { transform: translateY(1px); } }
+
+.hero { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 3rem; align-items: center; padding-block: 2.5rem 4rem; }
+.hero > div { min-width: 0; }
+h1, h2 { font-family: var(--font-display); font-weight: 700; letter-spacing: -0.02em; text-wrap: balance; line-height: 1.1; }
+h1 { font-size: clamp(2.2rem, 5.5vw, 3.4rem); margin: 0.5rem 0 1rem; }
+.eyebrow { font-family: var(--font-mono); font-size: 0.78rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent-strong); margin: 0; }
+.lead { font-size: 1.2rem; color: var(--band-muted); max-width: 32rem; margin: 0 0 1.75rem; }
+.ctas { display: flex; gap: 0.75rem; flex-wrap: wrap; }
+
+/* Phone */
+.phone {
+  width: min(100%, 20rem); margin-inline: auto; border-radius: 2rem; padding: 0.6rem;
+  background: #050807; box-shadow: 0 24px 60px rgba(0,0,0,0.35);
+}
+.screen { border-radius: 1.5rem; overflow: hidden; background: var(--chat-bg); }
+.chat-head { background: #1f5c4a; color: #fff; padding: 0.8rem 1rem; display: flex; align-items: center; gap: 0.6rem; }
+.chat-head .av { width: 2rem; height: 2rem; border-radius: 50%; background: var(--accent-strong); display: grid; place-items: center; flex: none; }
+.chat-head b { display: block; font-size: 0.92rem; line-height: 1.2; }
+.chat-head small { font-size: 0.72rem; opacity: 0.75; }
+.chat { padding: 0.8rem; display: flex; flex-direction: column; gap: 0.5rem; font-size: 0.84rem; line-height: 1.4; color: #17201d; }
+.bub { max-width: 85%; padding: 0.45rem 0.65rem; border-radius: 0.6rem; background: var(--bubble-in); box-shadow: 0 1px 1px rgba(0,0,0,0.08); }
+.bub.out { align-self: flex-end; background: var(--bubble-out); }
+.bub .t { display: block; text-align: right; font-size: 0.66rem; opacity: 0.55; margin-top: 0.15rem; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .bub { color: #e9ece8; } }
+:root[data-theme="dark"] .bub { color: #e9ece8; }
+.page {
+  background: var(--paper); color: var(--pen); font-family: var(--font-hand); font-size: 1.05rem; line-height: 1.25;
+  border-radius: 0.35rem; padding: 0.5rem 0.65rem; transform: rotate(-1.5deg);
+  background-image: repeating-linear-gradient(transparent 0 1.25rem, rgba(35,58,140,0.12) 1.25rem 1.3rem);
+}
+.page s { opacity: 0.55; }
+.alert { border-left: 3px solid var(--bad); }
+.mono { font-family: var(--font-mono); font-size: 0.78rem; }
+.ex { text-align: center; font-size: 0.78rem; color: var(--band-muted); margin: 0.9rem 0 0; }
+
+/* Paper sections */
+main section { padding-block: 3.5rem; border-top: 1px solid var(--rule); }
+main section:first-child { border-top: 0; }
+h2 { font-size: clamp(1.5rem, 3.5vw, 1.9rem); margin: 0.35rem 0 1.25rem; }
+.label { font-family: var(--font-mono); font-size: 0.78rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent); margin: 0; }
+.steps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1.25rem; }
+.steps li { background: var(--surface); border: 1px solid var(--rule); border-radius: 8px; padding: 1.25rem; }
+.steps .n { font-family: var(--font-mono); font-weight: 600; color: var(--accent); font-size: 0.9rem; }
+.steps strong { display: block; font-size: 1.08rem; margin: 0.35rem 0 0.3rem; }
+.steps p { margin: 0; color: var(--muted); font-size: 0.98rem; }
+
+.split { display: grid; grid-template-columns: 1fr 1fr; gap: 2.5rem; align-items: start; }
+.split > div { min-width: 0; }
+.ledger { background: var(--surface); border: 1px solid var(--rule); border-radius: 8px; overflow-x: auto; }
+.ledger table { border-collapse: collapse; width: 100%; font-family: var(--font-mono); font-size: 0.9rem; font-variant-numeric: tabular-nums; }
+.ledger caption { position: absolute; left: -9999px; }
+.ledger th, .ledger td { padding: 0.6rem 1rem; text-align: right; border-bottom: 1px solid var(--rule); white-space: nowrap; }
+.ledger th:first-child, .ledger td:first-child { text-align: left; }
+.ledger th { font-weight: 600; color: var(--muted); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.06em; }
+.ledger tr:last-child td { border-bottom: 0; }
+.ledger .total td { font-weight: 600; background: var(--accent-soft); }
+.ledger .gap { color: var(--bad); }
+.formula { font-family: var(--font-mono); font-size: 0.88rem; color: var(--muted); margin: 0.9rem 0 0; }
+.explain p { margin: 0 0 1rem; color: var(--muted); }
+.explain p:first-child { color: var(--ink); font-size: 1.12rem; }
+.note { font-size: 0.9rem; color: var(--muted); margin: 1rem 0 0; }
+
+.facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1.5rem; margin: 0; }
+.facts dt { font-weight: 600; font-size: 1.05rem; }
+.facts dd { margin: 0.25rem 0 0; color: var(--muted); }
+
+.cta-band { background: var(--accent-soft); border-radius: 12px; padding: 2rem; display: flex; justify-content: space-between; align-items: center; gap: 1.5rem; flex-wrap: wrap; }
+.cta-band h2 { margin: 0.3rem 0 0.4rem; }
+.cta-band p { margin: 0; color: var(--muted); }
+.cta-band .btn { color: #1b1305; }
+.mail { font-family: var(--font-mono); font-size: 0.95rem; color: var(--ink); }
+
+footer { border-top: 1px solid var(--rule); padding-block: 1.5rem 2.5rem; font-size: 0.88rem; color: var(--muted); }
+footer .inner { display: flex; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+footer p { margin: 0.2rem 0; }
+
+@media (max-width: 760px) {
+  .hero { grid-template-columns: 1fr; gap: 2.5rem; padding-block: 1.5rem 3rem; }
+  .steps, .facts { grid-template-columns: 1fr; }
+  .split { grid-template-columns: 1fr; gap: 1.5rem; }
+  .top .btn { padding: 0.5rem 0.85rem; font-size: 0.9rem; }
+  .cta-band { padding: 1.5rem; }
+}
+</style>
+</head>
+<body>
+
+<div class="band">
+  <div class="inner">
+    <header class="top">
+      <a class="brand" href="#" aria-label="Pyattson &amp; Co, home">
+        <svg width="34" height="34" viewBox="0 0 34 34" aria-hidden="true">
+          <rect x="1" y="1" width="32" height="32" rx="8" fill="none" stroke="#e8901f" stroke-width="2"/>
+          <path d="M17 7 C17 7 10 15 10 19.5 A7 7 0 0 0 24 19.5 C24 15 17 7 17 7 Z" fill="#e8901f"/>
+          <path d="M13.6 19.6 l2.4 2.4 l4.4 -4.6" fill="none" stroke="#10302a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <div><b>Pyattson &amp; Co</b><span>Fuel Check</span></div>
+      </a>
+      <a class="btn" href="mailto:hello@pyattson.co.uk?subject=Fuel%20Check%20pilot">Book a pilot</a>
+    </header>
+
+    <div class="hero">
+      <div>
+        <p class="eyebrow">For petrol stations in Kenya</p>
+        <h1>Know the same evening when fuel goes missing.</h1>
+        <p class="lead">Pyattson &amp; Co checks your station's daily dips, pump readings and deliveries, and sends you a short WhatsApp message saying whether the fuel adds up.</p>
+        <div class="ctas">
+          <a class="btn" href="mailto:hello@pyattson.co.uk?subject=Fuel%20Check%20pilot">Book a pilot</a>
+          <a class="btn ghost" href="#how">How it works</a>
+        </div>
+      </div>
+
+      <div>
+        <div class="phone" role="img" aria-label="Example WhatsApp conversation: a manager sends a photo of the notebook page, Pyattson confirms the readings, then reports 290 litres missing.">
+          <div class="screen">
+            <div class="chat-head">
+              <div class="av" aria-hidden="true">
+                <svg width="16" height="16" viewBox="0 0 34 34"><path d="M17 5 C17 5 8 15 8 20.5 A9 9 0 0 0 26 20.5 C26 15 17 5 17 5 Z" fill="#10302a"/></svg>
+              </div>
+              <div><b>Pyattson &amp; Co</b><small>Fuel Check</small></div>
+            </div>
+            <div class="chat">
+              <div class="bub out">
+                <div class="page">14/10 · PMS Tank 1<br>Opening dip 10575<br>Pump 1 152430 → 154230<br>Pump 2 98760 → 100160<br>Closing dip 70<s>9</s>85</div>
+                <span class="t">19:42</span>
+              </div>
+              <div class="bub">I read: opening <span class="mono">10,575</span>, sold <span class="mono">3,200</span>, closing <span class="mono">7,085</span>. Is that right?<span class="t">19:42</span></div>
+              <div class="bub out">Yes<span class="t">19:43</span></div>
+              <div class="bub alert">🛑 Tank 1 (PMS): <b>290 litres missing</b> today, about KES 65,800. Please check the shift records.<span class="t">19:43</span></div>
+            </div>
+          </div>
+        </div>
+        <p class="ex">Example conversation</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<main>
+  <section id="how">
+    <div class="inner">
+      <p class="label">How it works</p>
+      <h2>No new equipment. No new app.</h2>
+      <ol class="steps">
+        <li><span class="n">01</span><strong>Send a photo of the day's page</strong><p>Your manager sends a photo of the notebook page with the opening dip, deliveries, pump meter readings and closing dip, the records you already keep.</p></li>
+        <li><span class="n">02</span><strong>We check the numbers</strong><p>We read the page, confirm the readings with the sender, then compare the fuel that left each tank with what the pumps say was sold.</p></li>
+        <li><span class="n">03</span><strong>You get the result on WhatsApp</strong><p>A short message every evening, with a clear warning when fuel is missing or a delivery wasn't recorded, and a weekly summary with the value in shillings.</p></li>
+      </ol>
+    </div>
+  </section>
+
+  <section>
+    <div class="inner">
+      <p class="label">An example day</p>
+      <h2>What the check looks at</h2>
+      <div class="split">
+        <div>
+          <div class="ledger">
+            <table>
+              <caption>Example readings for one tank on one day</caption>
+              <thead><tr><th scope="col">PMS · Tank 1</th><th scope="col">Litres</th></tr></thead>
+              <tbody>
+                <tr><td>Opening dip</td><td>10,575</td></tr>
+                <tr><td>Delivered</td><td>0</td></tr>
+                <tr><td>Sold (pump meters)</td><td>3,200</td></tr>
+                <tr><td>Expected closing</td><td>7,375</td></tr>
+                <tr><td>Closing dip</td><td>7,085</td></tr>
+                <tr class="total"><td>Difference</td><td class="gap">−290</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="formula">expected closing = opening + delivered − sold</p>
+        </div>
+        <div class="explain">
+          <p>Every evening, the fuel that should be in the tank is compared with what's actually there.</p>
+          <p>Small differences are normal, because fuel expands and shrinks with heat and dipsticks aren't perfect. Those are ignored.</p>
+          <p>A bigger gap gets flagged the same evening, with the litres and the value in shillings, so you can check the shift while it's fresh, not weeks later.</p>
+          <p class="note">Example figures for illustration.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="inner">
+      <p class="label">Who it's for</p>
+      <h2>Independent petrol stations in Kenya</h2>
+      <dl class="facts">
+        <div><dt>Owners who aren't on site</dt><dd>See every evening whether the fuel adds up, without waiting for the end-of-month count.</dd></div>
+        <div><dt>Stations that record by hand</dt><dd>Works with dipsticks and a notebook. No tank sensors needed to start.</dd></div>
+        <div><dt>Petrol and diesel</dt><dd>PMS and AGO tanks are checked separately.</dd></div>
+      </dl>
+    </div>
+  </section>
+
+  <section id="contact">
+    <div class="inner">
+      <div class="cta-band">
+        <div>
+          <p class="label">Pilot stations</p>
+          <h2>Talk to us about a pilot</h2>
+          <p>We're starting with a small number of stations, with visits in Kenya from January 2027.<br>Email <span class="mail">hello@pyattson.co.uk</span></p>
+        </div>
+        <a class="btn" href="mailto:hello@pyattson.co.uk?subject=Fuel%20Check%20pilot">Book a pilot</a>
+      </div>
+    </div>
+  </section>
+
+  <section aria-labelledby="privacy-h">
+    <div class="inner narrow">
+      <p class="label">Privacy</p>
+      <h2 id="privacy-h">Your records stay yours</h2>
+      <p>We use the photos and readings a station sends only to run its fuel checks and send its messages. We don't sell or share them, and we delete a station's records on request.</p>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="inner">
+    <p>Pyattson &amp; Co is a sole trader business based in the United Kingdom.</p>
+    <p>© 2026 Pyattson &amp; Co</p>
+  </div>
+</footer>
+
+</body>
+</html>
